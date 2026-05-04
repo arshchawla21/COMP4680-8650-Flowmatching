@@ -11,7 +11,7 @@ def sinusoidal_embd(t, dim=128):
     arg = t[:, None] * omega[None, :]                     # (B, k)
     return torch.cat([arg.sin(), arg.cos()], dim=-1)      # (B, dim)
 
-class network(nn.Module):
+class JiM(nn.Module):
     """Just image MLP :)"""
     def __init__(
         self,
@@ -34,5 +34,5 @@ class network(nn.Module):
 
     def forward(self, z, t):
         et = sinusoidal_embd(t)
-        x = torch.cat([z, et], dim=-1) # (D+128)
-        return self.layers(x)
+        g = torch.cat([z, et], dim=-1) # (D+128)
+        return self.layers(g)

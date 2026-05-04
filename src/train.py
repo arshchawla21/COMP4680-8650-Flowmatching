@@ -12,6 +12,10 @@ def flow_matching_loss(model, x, pred_type, loss_type):
 
     if pred_type == 'x' and loss_type == 'x':
         target, output = x, pred
+    elif pred_type == 'x' and loss_type == 'v':
+        output, target = (z_t - pred) / t[:, None], eps - x
+    elif pred_type == 'v' and loss_type == 'x':
+        output, target = z_t - t[:, None] * pred, x
     elif pred_type == 'v' and loss_type == 'v':
         target, output = eps - x, pred
 

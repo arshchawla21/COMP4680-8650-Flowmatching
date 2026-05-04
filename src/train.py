@@ -5,8 +5,7 @@ import sys
 
 import torch
 import numpy as np
-
-import misc
+import torch.nn.functional as F
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Decay the learning rate with half-cycle cosine after warmup"""
@@ -27,30 +26,32 @@ def adjust_learning_rate(optimizer, epoch, args):
             param_group["lr"] = lr
     return lr
 
-def train_one_epoch(model, data_loader, optim, device, epoch, log_writer=None, args=None):
-    model.train(True)
-    metric_logger = misc.MetricLogger(delimiter="  ")
-    metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    header = 'Epoch: [{}]'.format(epoch)
-    print_freq = 20
+def flow_matching_loss(model, x, pred_type, loss_type):
+    B = x.shape[0]
+    t = torch.rand(size=B, device=x.device).clamp(1e-3, 1-1e-3)
+    eps = torch.randn_like(x)
+    z_t = (1 - t[:, None]) * x + t[:, None] * eps
 
+    pred = model(z_t, t)
+
+    if pred_type == 'x' and loss_type == 'x':
+        target, output = x, pred
+    elif pred_type == 'v' and loss_type == 'v':
+        target, output = eps - x, pred
+
+    return F.mse_loss(target, output)
+
+def train_one_epoch(model, dataloader, optim, device, epoch, pred_type, loss_type):
+    model.train(True)
     optim.zero_grad()
 
-    if log_writer is not None:
-        print('log_dir: {}'.format(log_writer.log_dir))
+    for x in dataloader:
+        x = x.to(device, non_blocking=True)        # (B, D)
+        loss = flow_matching_loss(model, x, pred_type, loss_type)
+        
+        if epoch % 50 == 0:
+            print(f"Loss: {loss}")
 
-    for data_iter_step, (x, labels) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
-        # per iteration (instead of per epoch) lr scheduler
-        adjust_learning_rate(optim, data_iter_step / len(data_loader) + epoch, args)
-
-        # normalize image to [-1, 1]
-        x = x.to(device, non_blocking=True).to(torch.float32).div_(255)
-        x = x * 2.0 - 1.0
-        labels = labels.to(device, non_blocking=True)
-
-        loss = model(x, labels)
-
-        loss_value = loss.item()
-        if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            sys.exit(1)
+        optim.zero_grad()
+        loss.backward()
+        optim.step()

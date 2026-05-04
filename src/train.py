@@ -21,26 +21,30 @@ def flow_matching_loss(model, x, pred_type, loss_type):
 
     return F.mse_loss(target, output)
 
-def train_one_epoch(model, dataloader, optim, device, epoch, epoch_print, pred_type, loss_type):
-    model.train(True)
-    
-    total_loss = 0.0
-    num_batches = 0
-    
-    for x in dataloader:
-        x = x.to(device, non_blocking=True)        # (B, D)
+def train_n_steps(model, dataloader, optim, device, n_steps, pred_type, loss_type, log_every=500):
+    model.train()
+    losses = []
+    step = 0
+    data_iter = iter(dataloader)
+
+    while step < n_steps:
+        try:
+            x = next(data_iter)
+        except StopIteration:
+            data_iter = iter(dataloader)            # restart when exhausted
+            x = next(data_iter)
+
+        x = x.to(device, non_blocking=True)
         loss = flow_matching_loss(model, x, pred_type, loss_type)
-        
+
         optim.zero_grad()
         loss.backward()
         optim.step()
-        
-        total_loss += loss.item()
-        num_batches += 1
-    
-    avg_loss = total_loss / num_batches
-    
-    if epoch % epoch_print == 0:
-        print(f"=== Epoch: {epoch}, Avg Loss: {avg_loss:.6f} ===")
-    
-    return avg_loss
+
+        losses.append(loss.item())
+        step += 1
+        if step % log_every == 0:
+            recent = sum(losses[-log_every:]) / log_every
+            print(f"step {step:>6}/{n_steps}  loss {recent:.6f}")
+
+    return losses

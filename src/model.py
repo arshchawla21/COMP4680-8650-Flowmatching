@@ -18,6 +18,8 @@ class JiM(nn.Module):
         hidden_dim: int = 256,
         D: int = 2,
     ):
+        super().__init__()
+
         self.layers = nn.Sequential(
             nn.Linear(D+128, hidden_dim),
             nn.ReLU(),

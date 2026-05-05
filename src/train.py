@@ -2,10 +2,21 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 
-def flow_matching_loss(model, x, pred_type, loss_type):
+def flow_matching_loss(model, x, pred_type, loss_type, P=None, opt=False):
     B = x.shape[0]
+    D = x.shape[1]
+    
     t = torch.rand(B, device=x.device).clamp(1e-3, 1-1e-3)
-    eps = torch.randn_like(x)
+
+    if P is None or not opt:
+        eps = torch.randn_like(x)
+    else:
+        # make eps is 2 dim (intrinsic) -> low rank noise
+        # using "patching"
+        P = torch.as_tensor(P, dtype=x.dtype, device=x.device)
+        eps_2d = torch.randn(B, P.shape[0], device=x.device) 
+        eps = eps_2d @ P                           # (B, D)
+
     z_t = (1 - t[:, None]) * x + t[:, None] * eps
 
     pred = model(z_t, t)
@@ -35,7 +46,7 @@ def train_n_steps(model, dataloader, optim, device, n_steps, pred_type, loss_typ
             x = next(data_iter)
 
         x = x.to(device, non_blocking=True)
-        loss = flow_matching_loss(model, x, pred_type, loss_type)
+        loss = flow_matching_loss(model, x, pred_type, loss_type, dataloader.dataset.P)
 
         optim.zero_grad()
         loss.backward()

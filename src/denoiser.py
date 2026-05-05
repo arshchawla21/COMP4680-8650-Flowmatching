@@ -13,8 +13,13 @@ class Denoiser():
         self.D = D
 
     @torch.no_grad()
-    def generate(self, bsz, pred_type, device):
-        z = torch.randn(bsz, self.D, device=device)
+    def generate(self, bsz, pred_type, device, P=None, opt=False):
+        if P is None or not opt:
+            z = torch.randn(bsz, self.D, device=device)
+        else:
+            P = torch.as_tensor(P, device=device)
+            z = torch.randn(bsz, P.shape[0], device=device) @ P
+
         timesteps = torch.linspace(1.0, 0.0, self.steps+1, device=device)
 
         # ode

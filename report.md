@@ -87,4 +87,16 @@ Meanwhile, for $v$-prediction, the model is tasked with learning $v=\epsilon-x$.
 
 As for the loss-space, the MSE is a $t$-dependent reweighting, meaning the underlying objective being learned remains the same.
 
-# Part 3
+# Part 3: Can We Rescue v-Prediction?
+### Baseline
+From part 2, we have the following baseline for $v$-prediction (SWD ~ 0.11):
+![image](res/part3/swiss_baseline.png)
+
+We previously determined that $v$-pred struggles as $D$ scales, due to full-rank gaussian noise impeding the intrisically 2-dimentional target signal. The [RAE](papers/RAE.pdf) outlines the key insight, **the process should lie on the same manifold as the data**. From this the we have our first proposition **reduce the intrinic dimenionality of noise to match data, independent of $D$**.
+
+To achieve this, it is natural to use the randomly initalised matrix $P$, responsible for projecting $R^D \rightarrow R^2$. We outline the process as follows,
+
+1. Sample $\epsilon_2 \sim \mathcal{N}(0,I)$, where $\epsilon_2 \in R^2$
+2. Project to $R^D$: $\epsilon_D = \epsilon_2 \cdot P$, where $\epsilon_D \in R^D$ and $P \in R^{2 \times D}$
+
+The same procedure must be applied at sampling time, since the model has only ever seen noise on the data subspace. Concretely, the initial state of the ODE is drawn as $z_1 = \epsilon_2 \cdot P$ rather than $z_1 \sim \mathcal{N}(0, I_D)$, sampling from full-rank Gaussian noise in $\mathbb{R}^D$ would push the trajectory off the data manifold and break the train/test consistency that this rescue depends on. Below is 

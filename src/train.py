@@ -32,7 +32,7 @@ def flow_matching_loss(model, x, pred_type, loss_type, P=None, opt=False):
 
     return F.mse_loss(target, output)
 
-def train_n_steps(model, dataloader, optim, device, n_steps, pred_type, loss_type, log_every=500):
+def train_n_steps(model, dataloader, optim, device, n_steps, pred_type, loss_type, opt=False, log_every=500):
     model.train()
     losses = []
     step = 0
@@ -46,7 +46,7 @@ def train_n_steps(model, dataloader, optim, device, n_steps, pred_type, loss_typ
             x = next(data_iter)
 
         x = x.to(device, non_blocking=True)
-        loss = flow_matching_loss(model, x, pred_type, loss_type, dataloader.dataset.P)
+        loss = flow_matching_loss(model, x, pred_type, loss_type, dataloader.dataset.P, opt=opt)
 
         optim.zero_grad()
         loss.backward()

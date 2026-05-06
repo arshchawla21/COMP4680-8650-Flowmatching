@@ -10,9 +10,9 @@
 
 Hyperparameters:
 
-| n_steps | lr | batch_size | denoising_steps | generated_points |
-| - | - | - | - | - |
-| 25000 | 1e-3 | 1024 | 50 | 2048 |
+| n_steps | lr | batch_size | denoising_steps | generated_points | clamping |
+| - | - | - | - | - | - |
+| 25000 | 1e-3 | 1024 | 50 | 2048 | 0.01 |
 
 ![image](res/part1/swiss_roll_JiM.png)
 ![image](res/part1/gaussians_JiM.png)

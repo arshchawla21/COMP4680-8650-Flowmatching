@@ -2,11 +2,11 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 
-def flow_matching_loss(model, x, pred_type, loss_type, P=None, opt=False):
+def flow_matching_loss(model, x, pred_type, loss_type, clamp, P=None, opt=False):
     B = x.shape[0]
     D = x.shape[1]
     
-    t = torch.rand(B, device=x.device).clamp(1e-3, 1-1e-3)
+    t = torch.rand(B, device=x.device).clamp(clamp, 1-clamp)
 
     if P is None or not opt:
         eps = torch.randn_like(x)
@@ -32,7 +32,7 @@ def flow_matching_loss(model, x, pred_type, loss_type, P=None, opt=False):
 
     return F.mse_loss(target, output)
 
-def train_n_steps(model, dataloader, optim, device, n_steps, pred_type, loss_type, opt=False, log_every=500):
+def train_n_steps(model, dataloader, optim, device, n_steps, pred_type, loss_type, clamp=0.01, opt=False, log_every=500):
     model.train()
     losses = []
     step = 0
@@ -46,7 +46,7 @@ def train_n_steps(model, dataloader, optim, device, n_steps, pred_type, loss_typ
             x = next(data_iter)
 
         x = x.to(device, non_blocking=True)
-        loss = flow_matching_loss(model, x, pred_type, loss_type, dataloader.dataset.P, opt=opt)
+        loss = flow_matching_loss(model, x, pred_type, loss_type, clamp, dataloader.dataset.P, opt=opt)
 
         optim.zero_grad()
         loss.backward()

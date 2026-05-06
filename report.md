@@ -100,3 +100,9 @@ To achieve this, it is natural to use the randomly initalised matrix $P$, respon
 2. Project to $R^D$: $\epsilon_D = \epsilon_2 \cdot P$, where $\epsilon_D \in R^D$ and $P \in R^{2 \times D}$
 
 The same procedure must be applied at sampling time, since the model has only ever seen noise on the data subspace. Concretely, the initial state of the ODE is drawn as $z_1 = \epsilon_2 \cdot P$ rather than $z_1 \sim \mathcal{N}(0, I_D)$, sampling from full-rank Gaussian noise in $\mathbb{R}^D$ would push the trajectory off the data manifold and break the train/test consistency that this rescue depends on. Below is 
+
+- seperate ground truth to left
+- add loss curves to part 2) and part 3)
+- add increased hidden layer to part 3)
+
+- final part steps y, 

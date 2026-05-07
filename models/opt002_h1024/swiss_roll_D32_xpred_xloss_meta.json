@@ -1,0 +1,11 @@
+{
+  "hidden_dim": 1024,
+  "D": 32,
+  "pred": "x",
+  "loss": "x",
+  "opt": true,
+  "n_steps": 25000,
+  "train_time_s": 75.46630641000002,
+  "n_params": 4396064,
+  "file_size_bytes": 17589653
+}

@@ -14,9 +14,9 @@ Hyperparameters:
 | - | - | - | - | - | - |
 | 25000 | 1e-3 | 1024 | 50 | 2048 | 0.01 |
 
-![image](res/part1/swiss_roll_JiM.png)
-![image](res/part1/gaussians_JiM.png)
-![image](res/part1/circles_JiM.png)
+Trained on $v$-prediction (target) with $v$-loss
+
+![image](res/part1/JiM_grid.png)
 
 # Part 2
 
@@ -62,23 +62,26 @@ We use the same hyperparameters as Part 1.2.
 
 #### 1. Prediction-type scaling
 
-It is clear that $x$-prediction scales to $D=32$ better than $v$-predictionm across the three 
-datasets. Qualitatively $D=32$ with $x$-pred least resembles the target dataset. To make our analysis
-more robust, we measure sliced Wasserstein distance to compare the ground truth vs sampled generation.
-We identify the trend, for each prediciton type, we average the WSD for each $D$, the results are below:
+It is clear that $x$-prediction scales to $D=32$ better than $v$-prediction, across the three  datasets. Qualitatively $D=32$ with $x$-pred least resembles the target dataset. To make our analysis more robust, we measure generation density & coverage [1], a strong metric for comparing generation with ground truth. 
 
-![image](res/part2/swd_vs_dimension.png)
+> **Density** is average number of real-point k-NN balls each generated sample falls into, divided by k [1]
 
-The above the trend is clear, $v$-pred scales the worst, while $x$-pred scales successfully, i.e., 
+> **Coverage** is fraction of real points whose k-NN ball contains at least one generated sample (k=5, ball radius = distance to k-th real neighbour). [1]
+
+Below we plot density/coverage as a function of the ambient dimention $D$: 
+
+![image](res/part2/density_coverage_vs_dimension.png)
+
+The trend is clear, $v$-pred (green and red) scales the worse than $x$-pred (blue and orange). This is consistent with our generated results.
 
 $$x_\text{pred} >_\text{dim scaling} v_\text{pred}$$
 
-It is at $D=32$ where the latter 3 prediction types **fail**.
-
 #### 2. Loss-space
-The loss space appears to have a minimal impact. Referring to the above graph, consider the green and red lines (i.e., $v$-pred with each kind of loss). Both follow almost identical SWD trends across the $D$ dimension, similar can be said for respsective blue and orange curves.
+The loss space appears to have minimal impact. Referring to the above graph, consider the green and red lines (i.e., $v$-pred with each kind of loss). Both follow almost identical coverage/density vs. $D$ trends, similar can be said for respsective blue and orange curves.
 
-It is clear that prediction type has signficiantly more impact than loss-type, in generation quality.
+This is strongly backed by the loss curves for each prediction combination below ($D=32$), where each loss type 
+
+![image](res/part2/loss_type.png)
 
 #### 3. Why does $x$-pred scale to higher $D$
 $x$-prediction scales superior to $v$-prediction as $D$ grows, as the signal to be learned is better preserved. For $x$-pred at a high $D$, the target data lies on a 2D manifold under $R^D$ (well described in [Basics](papers/Basics.pdf)). Therefore the model is intrinsically learning in 2D, regardless of $D$, i.e., a projection onto the manifold. I.e., $rank(x)_\text{intrinsic} = 2$.
@@ -89,8 +92,8 @@ As for the loss-space, the MSE is a $t$-dependent reweighting, meaning the under
 
 # Part 3: Can We Rescue v-Prediction?
 ### Baseline
-From part 2, we have the following baseline for $v$-prediction (SWD ~ 0.11):
-![image](res/part3/swiss_baseline.png)
+From part 2, we have the following baseline for $v$-prediction NOO(SWD ~ 0.11):
+![image](res/part3/swiss_roll_grid_baseline.png)
 
 We previously determined that $v$-pred struggles as $D$ scales, due to full-rank gaussian noise impeding the intrisically 2-dimentional target signal. The [RAE](papers/RAE.pdf) outlines the key insight, **the process should lie on the same manifold as the data**. From this the we have our first proposition **reduce the intrinic dimenionality of noise to match data, independent of $D$**.
 
@@ -106,3 +109,6 @@ The same procedure must be applied at sampling time, since the model has only ev
 - add increased hidden layer to part 3)
 
 - final part steps y, 
+
+# References
+[1] Naeem et al., "Reliable Fidelity and Diversity Metrics for Generative Models", ICML 2020 (arXiv:2002.09797).

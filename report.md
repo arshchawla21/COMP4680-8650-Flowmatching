@@ -95,11 +95,16 @@ Meanwhile, for $v$-prediction, the model is tasked with learning $v=\epsilon-x$.
 As for the loss-space, the MSE is a $t$-dependent reweighting, meaning the underlying objective being learned remains the same.
 
 # Part 3: Can We Rescue v-Prediction?
-### Baseline
-From part 2, we have the following baseline for the `swiss_roll` dataset:
+From Part 2 we established that $v$-prediction degrades sharply as $D$ grows, with $D \geq 32$ giving qualitatively poor samples on the `swiss_roll` dataset. The diagnosis there was that $v = \epsilon - x$ inherits full-rank Gaussian noise in $\mathbb{R}^D$, so the target's intrinsic dimensionality scales with $D$ while $x$'s stays at $2$. This part tests whether that failure is fundamental or an artefact of the noise process being mismatched with the data manifold.
+
+
+The Part 2 baseline on `swiss_roll` reproduced below for reference:
 ![image](res/part3/swiss_roll_grid_baseline.png)
 
-We previously determined that $v$-pred struggles as $D$ scales, due to full-rank gaussian noise impeding the intrisically 2-dimentional target signal. [2] outlines the key insight, **the process should lie on the same manifold as the data**. From this the we have our first proposition **reduce the intrinic dimenionality of noise to match data, independent of $D$**.
+## Visualisations: what works and what doesn't
+> **`opt001`: Noise dimension matched to data manifold.**
+
+Relating to our hypothesis from part 2, [2] outlines a key insight, **the process should lie on the same manifold as the data**. From this the we have our first proposition **reduce the intrinic dimenionality of noise to match data, independent of $D$**.
 
 To achieve this, it is natural to use the randomly initalised matrix $P$, responsible for projecting $R^D \rightarrow R^2$. We outline the process as follows,
 
@@ -110,17 +115,83 @@ The same procedure must be applied at sampling time, since the model has only ev
 
 ![image](res/part3/swiss_roll_grid_opt001.png)
 
-This had a profound positive impact on $v$-predictions.
+> **`opt002`: Width scaling on top of `opt001`.** 
 
-We now turn our attention over to section 4 of [3], where it is outlined that **increasing the width of the network** (i.e., hidden layers) improves $v$-prediction. In light of this, we take our previous optimisation (noise dim), and test with `h=512` and `h=1024`.
+The effect on $v$-pred at $D = 32$ is dramatic, samples recover recognisable swiss-roll structure where the baseline produced a diffuse blob. $x$-pred is essentially unchanged.
+
+Section 4 of [3] argues wider networks specifically help $v$-prediction. We re-ran with $h = 512$ and $h = 1024$:
 
 ![image](res/part3/swiss_roll_grid_opt002_h512.png)
 
 ![image](res/part3/swiss_roll_grid_opt002_h1024.png)
 
-While the impact is not quite as notesable, resultant generations appear to better follow the ground truth shape, although there is not much to split `h=512` and `h=1024` from a qualitative standpoint.
+Width gives an additional but smaller bump, $v$-pred at $D = 32$ tracks the ground-truth shape a bit more tightly, though $h = 512$ vs $h = 1024$ is hard to separate qualitatively. The big win is `opt001`; `opt002` is incremental.
 
-Raw data (the graphs are based on)
+**Summary of what works/doesn't:** matching the noise process to the data manifold (`opt001`) is the decisive intervention and rescues $v$-pred at $D = 32$ at zero additional parameter cost. Width scaling helps further but with steeply diminishing returns. $x$-pred is unaffected by either change because it was already working, its target is intrinsically 2D regardless of $D$.
+
+## Q1. Is v-prediction's failure fundamental?
+
+No, the failure is parameterisation-dependent, not fundamental. Once the noise process is restricted to the same 2D subspace as the data, $v$-pred at $D = 32$ produces samples comparable in shape to $x$-pred (visually obvious in the `opt001` grid above; quantitatively the v-loss with v-pred drops from $0.0716$ at baseline to $0.0587$ with `opt001`, despite identical architecture and parameter count, see [Table 1] in appendix for more detail).
+
+This **supports** the Part 2 analysis rather than contradicting it. In Part 2 we attributed the scaling gap to $v$'s dependence on full-rank noise: $v = \epsilon - x$ has intrinsic rank that grows with $D$, while $x$ stays on a 2D manifold. The rescue here works *exactly* by removing that asymmetry, projecting $\epsilon$ onto the data manifold so $v$'s intrinsic dimensionality also stays at $2$. The fact that this single change closes most of the gap is direct evidence that full-rank noise was the root cause we identified in Part 2, not some inherent property of the $v$ parameterisation.
+
+## Q2. Approaches tried and compute cost vs. default x-prediction
+
+Two interventions, applied cumulatively:
+1. **Manifold-aligned noise (`opt001`)**: sample $\epsilon \in \mathbb{R}^2$ and project to $\mathbb{R}^D$ via the same $P$ used for the data, at both training and sampling time. No architectural change.
+2. **Width scaling (`opt002`)**, increase hidden size from $h = 256$ to $h \in \{512, 1024\}$ on top of `opt001`.
+
+| config                        | params    | rel. params | time/run | final loss (v-loss) |
+|-------------------------------|-----------|-------------|----------|---------------------|
+| **default x-pred** (baseline) | 312,608   | 1.0×        | 48s      | 0.0165 (x-loss)     |
+| baseline v-pred               | 312,608   | 1.0×        | 46s      | 0.0716              |
+| `opt001` v-pred               | 312,608   | **1.0×**    | 47s      | 0.0587              |
+| `opt002_h512` v-pred          | 1,149,472 | 3.7×        | 48s      | 0.0589              |
+| `opt002_h1024` v-pred         | 4,396,064 | 14.1×       | 75s      | 0.0588              |
+
+An intresting observation is that `opt001`'s increased performance comes at no increased compute cost. 
+
+Quanitfying performance via loss (especially when $x$-pred calculated using a different loss althougher) is uninformative. When analysing the density/coverage graph (see appendix table), we see `opt001` $v$-pred lands close to default $x$-pred, and `opt002` only marginally further.
+
+So to match default $x$-pred sample quality at $D = 32$, $v$-pred needs `opt001` at minimum (free) and benefits modestly from `opt002_h512` (3.7× params for a small additional gain). $x$-pred remains the cheaper route in absolute terms, but the gap is far smaller than Part 2 suggested it would be.
+
+## Q3. How do x-pred and v-pred respond to these changes?
+
+They respond very differently. The figure below plots density/coverage averaged over $D$, with the optimisation stage on the x-axis, one panel per (pred, loss) combination:
+
+![image](res/part3/scaling_dens_cov_per_predloss.png)
+
+$x$-pred (top row) is approximately flat across `baseline -> opt001 -> opt002_h512 -> opt002_h1024`, both density and coverage barely move. $v$-pred (bottom row) shows a large `baseline -> opt001` jump, then near-flat `opt001 -> opt002` behaviour. The two parameterisations have completely different sensitivity profiles to the same set of changes.
+
+The reason follows from what each parameterization has to learn as a function of $D$:
+
+- **$x$-pred's target is intrinsically 2D regardless of $D$.** The clean data lies on the 2D manifold $\{x P : x \in \mathbb{R}^2\} \subset \mathbb{R}^D$, and that's true at $D = 2$ and at $D = 32$. So $x$-pred is already aligned with the manifold by construction, projecting noise onto the manifold doesn't change what's being learned, and adding width doesn't help fit a target that was already simple. There's nothing for these changes to fix.
+- **$v$-pred's target inherits the dimensionality of $\epsilon$.** With full-rank Gaussian noise in $\mathbb{R}^D$, $v = \epsilon - x$ has intrinsic dimensionality $D$, so the model is fitting a $D$-dimensional regression target even though the data is 2D. `opt001` directly attacks this — projecting $\epsilon$ onto the manifold collapses $v$'s intrinsic rank back to $2$, restoring symmetry with $x$-pred. That's why the baseline opt001 jump is large. Once the target is again 2D, extra width (`opt002`) is fitting an already-tractable signal, so its marginal benefit is small, exactly the same regime $x$-pred has been in all along.
+
+In short, $x$-pred and $v$-pred converge to the same response curve once the noise dimensionality is fixed. The asymmetry observed in Part 2 wasn't a property of the parameterisations themselves, it was a consequence of the noise process being mismatched with the data manifold for $v$ but not for $x$.
+
+## Q4. Why does v-prediction behave differently in real image gen systems like FLUX and SD3
+
+---
+
+
+- seperate ground truth to left
+- add loss curves to part 2) and part 3)
+- add increased hidden layer to part 3)
+
+- final part steps y, 
+
+# References
+[1] Naeem et al., "Reliable Fidelity and Diversity Metrics for Generative Models", ICML 2020 (arXiv:2002.09797).
+
+[2] Li et al. "Back to Basics: Let Denoising Generative Models Denoise", 2026 (arXiv:2511.13720v2)
+
+[3] Zheng et al. "Diffusion Transformers with Representational Autoencoders", 2025 (arXiv:2510.11690v1)
+
+
+# Appendix
+
+
 
 | stage | h | D | pred | loss | params | size | time | final loss |
 |---|---|---|---|---|---|---|---|---|
@@ -172,28 +243,3 @@ Raw data (the graphs are based on)
 | opt002_h1024 | 1024 | 32 | x | v | 4396064 | 17.59 MB | 1m 15s | 0.0612 |
 | opt002_h1024 | 1024 | 32 | v | x | 4396064 | 17.59 MB | 1m 15s | 0.0165 |
 | opt002_h1024 | 1024 | 32 | v | v | 4396064 | 17.59 MB | 1m 15s | 0.0588 |
-
-for 1) the stuff from the papers (two references) speaks on if failure is fundemental
-
-for 2) list approaches, compare compute with the x-pred default 
-
-for 3) compare x-pred and v-pred respond
-
-![image](res/part3/scaling_dens_cov_per_predloss.png)
-
-from graph x pred stays reasonally constant, but v pred big improvement particually baseline->opt
-
-for 4)
-
-- seperate ground truth to left
-- add loss curves to part 2) and part 3)
-- add increased hidden layer to part 3)
-
-- final part steps y, 
-
-# References
-[1] Naeem et al., "Reliable Fidelity and Diversity Metrics for Generative Models", ICML 2020 (arXiv:2002.09797).
-
-[2] Li et al. "Back to Basics: Let Denoising Generative Models Denoise", 2026 (arXiv:2511.13720v2)
-
-[3] Zheng et al. "Diffusion Transformers with Representational Autoencoders", 2025 (arXiv:2510.11690v1)

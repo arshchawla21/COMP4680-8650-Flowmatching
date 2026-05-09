@@ -189,7 +189,7 @@ From our density/coverage graphs, the best model from part 2) was x-pred/v-loss 
 ![image](res/part4/sampling_efficiency.png)
 
 ## Q2. MeanFlow
-We produced the following at `mf_ratio=0.5` and $D=32$ with steps [1,2,5] for MeanFlow and [1,10,50] from our part 2 model (x-pred/v-pred for both). 
+We produced the following at `mf_ratio=0.5` and $D=32$ with steps [1,2,5] for MeanFlow and [1,10,50] from our part 2 model (x-pred/v-pred for both). All other hyperparameters remain the same as part 2 in part 4):
 
 ![image](res/part4/mf_vs_fm_swiss_roll_D32.png)
 ![image](res/part4/mf_vs_fm_gaussians_D32.png)
@@ -211,7 +211,7 @@ MeanFlow's core idea is to learn the **average velocity** over an interval $[r, 
 
 $$u(z_t, r, t) = \frac{1}{t-r} \int_r^t v(z_s, s)\, ds$$
 
-By construction, the displacement over $[r, t]$ equals exactly $(t-r) \cdot u$, no Euler approximation, no accumulated error. So one step from $t=1$ to $r=0$ using $u(z_1, 0, 1)$ lands at the data point in a single forward pass.
+By construction, the displacement over $[r, t]$ equals exactly $(t-r) \cdot u$, therefore no Euler approximation or accumulated error. So one step from $t=1$ to $r=0$ using $u(z_1, 0, 1)$ lands at the data point in a single forward pass.
 
 ##### What does the model learn that's different? 
 Standard FM's velocity field is a function of two variables $(z_t, t)$, it only encodes local tangent information. MeanFlow's mean velocity is a function of three: $(z_t, r, t)$. The extra input $h = t-r$ tells the model how far ahead it needs to "look", so it has to encode the *global shape* of the trajectory over a finite interval, not just the instantaneous direction.
@@ -221,10 +221,23 @@ Training pays for this. Since you can't compute the integral directly from one s
 This is what enables one-step generation: at sampling time, a single forward pass outputs the exact mean velocity for the full $[0, 1]$ interval. Thereafter the displacement formula $z_0 = z_1 - u$ finishes the job.
 
 ## Why is the MeanFlow training split required?
+MeanFlows target is `u_tgt_mf = v - h* dudt`, unlike a direct regression (as in standard FM) this quantity contains $\frac{du}{dt}$, i.e., the right-hand side (target) contains the model's own time derivative. Therefore model is told to "match" a quantity that depends on itself. This caveat means there exist many solutions (like PDEs) including many non-optimal. 
+
+Using $h=0$ for a portion of the time, results in the $\frac{du}{dt}$ terms being ignored (i.e., training like standard flow matching). In this time, the model trains with no self-reference, anchoring the model to a more optimal part of the solution space. After sufficent training, $h>0$ can be set with the model remaining anchored by the initial training.
 
 ## Compare training cost to standard flow matching, what is overhead of JVP operation?
+The notable increase in cost is the JVP operation. From the experimental data (table 2 in appendix), we notice that training time is roughtly 1.97x greater for the MeanFlow variant, model size and training parameters. The reason for this is what the JP (Jacobian-vector product) is calculating. For a function $f(x)$ and tangent $\dot{x}$, it returns $(f(x), \nabla f(x) \cdot \dot{x})$, which is roughtly double the work for each operations. This also means that PyTorch's autodiff needs to traverse a roughtly 2x larger graph for backpropogation. End-to-end (since this is dominating complexity), this results in 2x longer training steps.
 
 ## Compare the MeanFlow-generated samples against the ground truth
+**Qualitative Observation**: From a visual standpoint, the MeanFlow generations appears to have great coverage over the target, but noise (which costs in the density department). One step MF signficantly outpeforms one step FM as expected. Beyond this, the noise appears to be in the form of collaposed points (i.e., between two possible target locations). This is particularly evident on the `guassians` dataset, with the final generation resembling a "ring" with distinct points.
+
+Across `swiss_roll` and `circles`, performance (density/coverage) improves with step count for MeanFlow, as expected. The story is flipped for `gaussians` which appears non-monotonic, i.e., 2-step (0.71/0.83) stronger than 5-step (0.67/0.73).
+
+This is likely related to the point collapsing observation above. Using this hypothesis, we can actually **explain** the per dataset performance as a function of their ground truth distributions. Both `swiss_roll` and `circles` are  connected manifolds, the data lies on a single curve, or two concentric rings. gaussians is the opposite, 8 isolated cluster modes with empty space between them.
+
+Now let's take a step back, we have observed the behaviour (both qualitative and quantativly), but now let's unpick **why**. The answer lies in the idea of learning mean velocity. The model has to fit a single smooth function $u(z_t​,r,t)$ that captures the average direction over an interval. For connected manifolds the field is continuous — nearby noise points map to nearby targets, and a smooth MLP fits this naturally. For `gaussians` the field needs *hard discontinuities* at basin boundaries (two nearby noise points routing to different clusters), and a smooth network has no way to express that. Near a boundary the model averages across the two cluster directions and predicts an "in between" velocity. The "ring of distinct points" we noted earlier is exactly this, samples landing on the geometric average of nearby clusters because the network can't commit to one or the other.
+
+This also explains why more steps makes it worse on gaussians. At 1 step the model is queried once for $u(z_1, 0, 1)$ and commits, the error at basin boundaries exists but only one decision is made. At 5 steps the trajectory passes through intermediate states where the field is itself ambiguous (the conditional mean velocity at points equidistant from two clusters is genuinely undefined), and the smoothing artifact gets re-evaluated at every sub-step. The multi-step refinement story only works when the underlying field is continuous.
 
 ---
 

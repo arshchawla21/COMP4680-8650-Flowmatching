@@ -184,7 +184,12 @@ Other minor reasons for the situation being different:
 # Part 4
 
 ## Q1. Sampling Efficiency
-From our density/coverage graphs, the best model from part 2) was x-pred/v-loss at D=2. Below we run this model across a range of sampling steps:
+From our density/coverage graphs, the best model from part 2) was x-pred/v-loss at D=2. Below we run this model across a range of sampling steps across all the datasets:
+
+![image](res/part4/sampling_efficiency.png)
+
+## Q2. MeanFlow
+
 
 ---
 

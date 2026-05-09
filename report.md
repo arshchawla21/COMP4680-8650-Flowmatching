@@ -189,11 +189,48 @@ From our density/coverage graphs, the best model from part 2) was x-pred/v-loss 
 ![image](res/part4/sampling_efficiency.png)
 
 ## Q2. MeanFlow
+We produced the following at `mf_ratio=0.5` and $D=32$ with steps [1,2,5] for MeanFlow and [1,10,50] from our part 2 model (x-pred/v-pred for both). 
 
+![image](res/part4/mf_vs_fm_swiss_roll_D32.png)
+![image](res/part4/mf_vs_fm_gaussians_D32.png)
+![image](res/part4/mf_vs_fm_circles_D32.png)
+
+## Prediction Type for MeanFlow?
+We use $x$-prediction for the MeanFlow MLP. This was the parameterisation that performed well at $D=32$ in Part 2, and the reason carries directly into Part 4.
+
+The argument from Part 2: $x$-pred's target is the clean data, which lives on the 2D data manifold regardless of how large the ambient $D$ is. So the *intrinsic* dimensionality of what the model has to learn stays at 2. $v$-pred's target is $v = \epsilon - x$, which inherits the dimensionality of $\epsilon$ — full-rank Gaussian in $\mathbb{R}^D$, so the regression target's intrinsic dim grows with $D$. At $D=32$ the density/coverage gap between the two parameterisations was large.
+
+Part 4 trains at $D=32$, so picking $x$-pred lets MeanFlow inherit the same favourable scaling. 
+
+## Core Idea behind MeanFlow?
+Standard flow matching learns the **instantaneous velocity** $v(z_t, t)$, the tangent of the trajectory at a single point in time. To actually sample, you integrate this ODE numerically: take a small Euler step, re-evaluate $v$ at the new $z$, step again, and so on. You need many steps because $v$ changes along the trajectory, each Euler step is a linear approximation, where big steps might miss the curve entirely. The figure from the MeanFlow paper [6] shows exactly this: one large Euler step shoots off the true path.
+
+![image](res/part4/mf_paper.png)
+
+MeanFlow's core idea is to learn the **average velocity** over an interval $[r, t]$ instead:
+
+$$u(z_t, r, t) = \frac{1}{t-r} \int_r^t v(z_s, s)\, ds$$
+
+By construction, the displacement over $[r, t]$ equals exactly $(t-r) \cdot u$, no Euler approximation, no accumulated error. So one step from $t=1$ to $r=0$ using $u(z_1, 0, 1)$ lands at the data point in a single forward pass.
+
+##### What does the model learn that's different? 
+Standard FM's velocity field is a function of two variables $(z_t, t)$, it only encodes local tangent information. MeanFlow's mean velocity is a function of three: $(z_t, r, t)$. The extra input $h = t-r$ tells the model how far ahead it needs to "look", so it has to encode the *global shape* of the trajectory over a finite interval, not just the instantaneous direction.
+
+Training pays for this. Since you can't compute the integral directly from one sample, MeanFlow uses a self-consistency identity $u = v - h \cdot du/dt$ that the model must satisfy. The JVP is what computes $du/dt$.
+
+This is what enables one-step generation: at sampling time, a single forward pass outputs the exact mean velocity for the full $[0, 1]$ interval. Thereafter the displacement formula $z_0 = z_1 - u$ finishes the job.
+
+## Why is the MeanFlow training split required?
+
+## Compare training cost to standard flow matching, what is overhead of JVP operation?
+
+## Compare the MeanFlow-generated samples against the ground truth
 
 ---
 
 # Appendix
+
+## Table 1
 
 | stage | h | D | pred | loss | params | size | time | final loss |
 |---|---|---|---|---|---|---|---|---|
@@ -246,6 +283,29 @@ From our density/coverage graphs, the best model from part 2) was x-pred/v-loss 
 | opt002_h1024 | 1024 | 32 | v | x | 4396064 | 17.59 MB | 1m 15s | 0.0165 |
 | opt002_h1024 | 1024 | 32 | v | v | 4396064 | 17.59 MB | 1m 15s | 0.0588 |
 
+## Table 2
+
+| dataset    | method | steps | Density | Coverage | train  |
+|------------|--------|-------|---------|----------|--------|
+| swiss_roll | FM     | 1     | 0.000   | 0.000    | 0m 48s |
+| swiss_roll | FM     | 10    | 0.308   | 0.530    | 0m 48s |
+| swiss_roll | FM     | 50    | 0.589   | 0.606    | 0m 48s |
+| swiss_roll | MF     | 1     | 0.081   | 0.236    | 1m 35s |
+| swiss_roll | MF     | 2     | 0.180   | 0.384    | 1m 35s |
+| swiss_roll | MF     | 5     | 0.313   | 0.523    | 1m 35s |
+| gaussians  | FM     | 1     | 0.000   | 0.000    | 0m 48s |
+| gaussians  | FM     | 10    | 0.943   | 0.589    | 0m 48s |
+| gaussians  | FM     | 50    | 0.998   | 0.638    | 0m 48s |
+| gaussians  | MF     | 1     | 0.583   | 0.707    | 1m 35s |
+| gaussians  | MF     | 2     | 0.712   | 0.832    | 1m 35s |
+| gaussians  | MF     | 5     | 0.670   | 0.727    | 1m 35s |
+| circles    | FM     | 1     | 0.000   | 0.000    | 0m 48s |
+| circles    | FM     | 10    | 0.816   | 0.873    | 0m 48s |
+| circles    | FM     | 50    | 0.884   | 0.898    | 0m 48s |
+| circles    | MF     | 1     | 0.532   | 0.742    | 1m 34s |
+| circles    | MF     | 2     | 0.652   | 0.857    | 1m 34s |
+| circles    | MF     | 5     | 0.679   | 0.877    | 1m 34s |
+
 # References
 [1] Naeem et al., "Reliable Fidelity and Diversity Metrics for Generative Models", ICML 2020 (arXiv:2002.09797).
 
@@ -256,3 +316,5 @@ From our density/coverage graphs, the best model from part 2) was x-pred/v-loss 
 [4] SD3
 
 [5] FLUX
+
+[6] MeanFlow

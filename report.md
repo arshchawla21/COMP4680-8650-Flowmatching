@@ -171,27 +171,24 @@ The reason follows from what each parameterization has to learn as a function of
 In short, $x$-pred and $v$-pred converge to the same response curve once the noise dimensionality is fixed. The asymmetry observed in Part 2 wasn't a property of the parameterisations themselves, it was a consequence of the noise process being mismatched with the data manifold for $v$ but not for $x$.
 
 ## Q4. Why does v-prediction behave differently in real image gen systems like FLUX and SD3
+SD3 and FLUX are fundamentally different as they do not operate on pixels, instead they operate in an image latent space. The general process of [4] and [5] is as follows: they start with noise in this latent space (conditioned on text), perform diffusion in that space, and pass the final output through a decoding autoencoder to produce RGB images.
+
+This has a significant impact on our $v$-pred ambient vs. intrinsic $D$ argument. VAEs in SD3/FLUX are trained to make the latent space efficient, where reconstruction quality is the upper bound on generation quality. This means the autoencoder is pushed to capacity, in other words, the autoencoder is essentially doing our `opt001` for free, but learned.
+
+Another reason $v$-prediction works well in these models is a timestep optimisation in SD3. Paper [4] observes that $v$-pred targets are trivial at the endpoints (at $t=0$ or $t=1$, one of $\epsilon$ or $x$ is fully known, so the optimal prediction collapses to a distribution mean) and become harder to predict in between, where the actual learning signal lives. They exploit this with a *logit-normal* timestep sampler that biases training toward intermediate $t$, focusing compute where the signal is hardest.
+
+Other minor reasons for the situation being different:
+- **Scale:** the increased `hidden_layers` improvement is naturally present in these models, due to their size.
+- **Conditioning:** these models are conditioned, implying better learning signals.
+
+# Part 4
+
+## Q1. Sampling Efficiency
+From our density/coverage graphs, the best model from part 2) was x-pred/v-loss at D=2. Below we run this model across a range of sampling steps:
 
 ---
 
-
-- seperate ground truth to left
-- add loss curves to part 2) and part 3)
-- add increased hidden layer to part 3)
-
-- final part steps y, 
-
-# References
-[1] Naeem et al., "Reliable Fidelity and Diversity Metrics for Generative Models", ICML 2020 (arXiv:2002.09797).
-
-[2] Li et al. "Back to Basics: Let Denoising Generative Models Denoise", 2026 (arXiv:2511.13720v2)
-
-[3] Zheng et al. "Diffusion Transformers with Representational Autoencoders", 2025 (arXiv:2510.11690v1)
-
-
 # Appendix
-
-
 
 | stage | h | D | pred | loss | params | size | time | final loss |
 |---|---|---|---|---|---|---|---|---|
@@ -243,3 +240,14 @@ In short, $x$-pred and $v$-pred converge to the same response curve once the noi
 | opt002_h1024 | 1024 | 32 | x | v | 4396064 | 17.59 MB | 1m 15s | 0.0612 |
 | opt002_h1024 | 1024 | 32 | v | x | 4396064 | 17.59 MB | 1m 15s | 0.0165 |
 | opt002_h1024 | 1024 | 32 | v | v | 4396064 | 17.59 MB | 1m 15s | 0.0588 |
+
+# References
+[1] Naeem et al., "Reliable Fidelity and Diversity Metrics for Generative Models", ICML 2020 (arXiv:2002.09797).
+
+[2] Li et al. "Back to Basics: Let Denoising Generative Models Denoise", 2026 (arXiv:2511.13720v2)
+
+[3] Zheng et al. "Diffusion Transformers with Representational Autoencoders", 2025 (arXiv:2510.11690v1)
+
+[4] SD3
+
+[5] FLUX

@@ -322,12 +322,12 @@ This also explains why more steps makes it worse on gaussians. At 1 step the mod
 # References
 [1] Naeem et al., "Reliable Fidelity and Diversity Metrics for Generative Models", ICML 2020 (arXiv:2002.09797).
 
-[2] Li et al. "Back to Basics: Let Denoising Generative Models Denoise", 2026 (arXiv:2511.13720v2)
+[2] Li et al. "Back to Basics: Let Denoising Generative Models Denoise", 2026 (arXiv:2511.13720v2).
 
-[3] Zheng et al. "Diffusion Transformers with Representational Autoencoders", 2025 (arXiv:2510.11690v1)
+[3] Zheng et al. "Diffusion Transformers with Representational Autoencoders", 2025 (arXiv:2510.11690v1).
 
-[4] SD3
+[4] Stability AI. "Scaling Rectified Flow Transformers for High-Resolution Image Synthesis", 2024 (arXiv:2403.03206v).
 
-[5] FLUX
+[5] Black Forest Labs. "FLUX.1 Kontext: Flow Matching for In-Context Image Generation and Editing in Latent Space", 2025 (arXiv:2506.15742).
 
-[6] MeanFlow
+[6] Geng et al. "Mean Flows for One-step Generative Modeling", 2025 (arXiv:2505:13447v1).
